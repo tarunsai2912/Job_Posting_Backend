@@ -44,7 +44,7 @@ app.use((err, req, res, next) => {
     res.status(500).send("Something went wrong")
 })
 
-mongoose.connect(process.env.MONGO_URL)
+mongoose.connect('mongodb+srv://tarunsairayapureddi:ZTE9w3efKXVemSqF@fullstack-capstone.mwfxzq1.mongodb.net/?retryWrites=true&w=majority&appName=FullStack-capstone')
 
 mongoose.connection.on('connected', () => {
     console.log('MongoDb is connected...');
