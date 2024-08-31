@@ -8,12 +8,10 @@ const bodyParser = require('body-parser')
 const authRoutes = require('./routes/auth/index')
 const fs = require('fs') // File system library
 const jobRoutes = require('./routes/jobs')
-const authMiddleware = require('./middleware/auth')
 const cors = require('cors')
 
-app.use(cors({
-    origin: '*'
-}))
+app.use(cors())
+
 // Log every incoming request
 app.use((req, res, next) => {
     const log = `${req.method} - ${req.url} - ${req.ip} - ${new Date()}`
@@ -27,7 +25,7 @@ app.use((req, res, next) => {
 
 app.use(bodyParser.json())
 app.use('/api/auth', authRoutes)
-app.use('/api/jobs', authMiddleware, jobRoutes)
+app.use('/api/jobs', jobRoutes)
 app.get('/', (req, res) => {
     res.send('Hello World!')
 })

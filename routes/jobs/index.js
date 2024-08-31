@@ -1,37 +1,38 @@
 const express = require('express')
 const router = express.Router()
 const Job = require('../../models/job')
+const User = require('../../models/user')
+const authMiddleware = require('../../middleware/auth')
+const jobController = require('../../controllers/jobController')
 
-router.post('/create', async (req, res, next) => {
-    try{
-        const {name, logo, position, salary, jobType, remote, description, about, skills, info} = req.body
-        const skillsArray = skills.split(',').map(skill => skill.trim());
-        const user = req.user
-        const userId  = user._id
-        const newJob = new Job({
-            name, logo, position, salary, jobType, remote, description, about, skills: skillsArray, info, userId
-        })
-        await newJob.save()
-        res.status(200).json("Job Created")
-    }
-    catch(err) {
-        next(err)
-    }
-})
+router.post('/create', authMiddleware, jobController.addJob)
 
-router.delete('/delete/:id', async (req, res, next) => {
+router.delete('/delete/:jobid', authMiddleware, async (req, res, next) => {
     try{
-        const {id} = req.params
-        const userId = req.user._id
-        const defaultJob = Job.findById(id)
-        if(!defaultJob.userId.toString() != userId.toString()) {
-            return res.status(403).send("Access Denied")
+        const {jobid} = req.params
+
+        const user = await User.findById(req.user_Id)
+        if(!user){
+            return res.status(401).json({msg: 'User Not Found'})
         }
-        if(!id) {
-            res.status(403).send("Wrong Request")
+
+        const job = await Job.findById(jobid)
+        if(!job){
+            return res.status(401).json({msg: 'Job Not Found'})
         }
-        await Job.findByIdAndDelete(id)
-        res.status(200).send('Job Deleted')
+
+        if(req.user_Id.toString() !== job.userId.toString()){
+            return res.status(401).json({msg: 'Authentication Error'})
+        }
+        
+        await Job.findByIdAndDelete(jobid)
+
+        await User.updateMany(
+            { jobId: jobid },
+            { $pull: { jobId: jobid } }
+        )
+
+        return res.status(200).json({msg: 'Job Deleted'})
     }
     catch(err) {
         next(err)
@@ -44,8 +45,46 @@ router.get('/get/:id', async (req, res, next) => {
         if(!id) {
             res.status(403).send("Wrong Request")
         }
+
         const job = await Job.findById(id)
-        res.status(200).json(job)
+        if(!job){
+            return res.status(401).json({msg: 'Job Not Found'})
+        }
+
+        const timeAgo = (date) => {
+            const now = new Date();
+            const past = date;
+            const diffInSeconds = Math.floor((now - past) / 1000);
+          
+            const secondsInMinute = 60;
+            const secondsInHour = 60 * secondsInMinute;
+            const secondsInDay = 24 * secondsInHour;
+            const secondsInWeek = 7 * secondsInDay;
+          
+            if (diffInSeconds >= secondsInWeek) {
+                const weeks = Math.floor(diffInSeconds / secondsInWeek);
+                return `${weeks}w ago`;
+            } 
+            else if (diffInSeconds >= secondsInDay) {
+                const days = Math.floor(diffInSeconds / secondsInDay);
+                return `${days}d ago`;
+            } 
+            else if (diffInSeconds >= secondsInHour) {
+                const hours = Math.floor(diffInSeconds / secondsInHour);
+                return `${hours}h ago`;
+            } 
+            else if (diffInSeconds >= secondsInMinute) {
+                const minutes = Math.floor(diffInSeconds / secondsInMinute);
+                return `${minutes}m ago`;
+            } 
+            else {
+                return `${diffInSeconds}s ago`;
+            }
+        }
+
+        const jobCreatedAt = timeAgo(job.createdAt)
+
+        return res.status(200).json({job, jobCreatedAt})
     }
     catch(err) {
         next(err)
@@ -54,81 +93,14 @@ router.get('/get/:id', async (req, res, next) => {
 
 router.get('/all', async (req, res, next) => {
     try{
-        const jobs = await Job.find().select('name logo position skills')
-        res.status(200).json(jobs)
+        const jobs = await Job.find().select('name logo position salary location skills remote jobType userId')
+        return res.status(200).json({jobs})
     }
     catch(err) {
         next(err)
     }
 })
 
-router.patch('/update/:id', async (req, res, next) => {
-    try{
-        const {id} = req.params
-        if(!id) {
-            return res.status(403).send('Wrong Request')
-        }
-        const {name, logo, position, salary, jobType, remote, description, about, skills, info} = req.body
-        const defaultJob = await Job.findById(id)
-        const user = req.user
-        const userId = user._id
-        if(!defaultJob.userId.toString() != userId.toString()) {
-            return res.status(403).send("Access Denied")
-        }
-        const skillsArray = skills?.split(',').map(skill => skill.trim()) || defaultJob.skills;
-        // If skills is undefined if not provided
-        const job = await Job.findByIdAndUpdate(id, {
-            name: name || defaultJob.name, 
-            logo: logo || defaultJob.logo, 
-            position: position || defaultJob.position, 
-            salary: salary || defaultJob.salary, 
-            jobType: jobType || defaultJob.jobType, 
-            remote: remote || defaultJob.remote, 
-            description: description || defaultJob.description, 
-            about: about || defaultJob.about, 
-            skills: skillsArray, 
-            info: info || defaultJob.info,
-            userId 
-        })
-        res.status(200).send('Job Updated')
-    }
-    catch(err) {
-        next(err)
-    }
-})
-
-router.get('/filter/:skills', async (req, res, next) => {
-    try{
-        const skills = req.params.skills
-        if(!skills) {
-            return res.status(403).send("Wrong Request")
-        }
-        const skillsArray = skills.split(',').map(skill => skill.trim())
-        const jobs = await Job.find({skills: {$in: skillsArray}}).select('name logo position')
-        res.status(200).json(jobs)
-    }
-    catch(err) {
-        next(err)
-    }
-})
-
-router.get('/search/:query', async (req, res,next) => {
-    try{
-        const query = req.params.query
-        const job = await Job.find({
-            $or: [
-                {name: {$regex: query, $options: 'i'}}, 
-                //options - Case insensitive
-                {position: {$regex: query, $options: 'i'}},
-                {jobType: {$regex: query, $options: 'i'}},
-                {description: {$regex: query, $options: 'i'}}
-            ]
-        }).select('name logo position')
-        res.status(200).json(job)
-    }
-    catch(err) {
-        next(err)
-    }
-})
+router.put('/update/:id', authMiddleware, jobController.updateJob)
 
 module.exports = router

@@ -6,8 +6,7 @@ const jobSchema = new mongoose.Schema({
         required: true
     },
     logo: {
-        type: String,
-        required: true
+        type: String
     },
     position: {
         type: String,
@@ -23,7 +22,12 @@ const jobSchema = new mongoose.Schema({
         required: true
     },
     remote: {
-        type: Boolean,
+        type: String,
+        enum: ['remote', 'office'],
+        required: true
+    },
+    location: {
+        type: String,
         required: true
     },
     description: {
@@ -42,11 +46,16 @@ const jobSchema = new mongoose.Schema({
         type: String,
         required: true
     }, 
-    userId: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: "User",
+    createdAt: {
+        type: String,
         required: true
-    }
+    },
+    userId: [
+        {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "User"
+        }
+    ]
 })
 
-module.exports = mongoose.model('JobSchema', jobSchema)
+module.exports = mongoose.model('Job', jobSchema)
